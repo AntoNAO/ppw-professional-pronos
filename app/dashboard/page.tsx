@@ -9,8 +9,9 @@ export default function DashboardPage() {
   const [profile, setProfile] = useState<any>(null)
   const [stats, setStats] = useState({
     pronos: 0,
-    points: 0,
-    shows: 0,
+    season_points: 0,
+    all_time_points: 0,
+    ple_best_player: 0,
   })
   const [nextEvent, setNextEvent] = useState<any>(null)
   const [top3, setTop3] = useState<any[]>([])
@@ -22,9 +23,10 @@ export default function DashboardPage() {
       const user = userData.user
       if (!user) return
 
+      // 🔥 Récupérer le profil avec les BONNES colonnes
       const { data: profileData } = await supabase
         .from("profiles")
-        .select("id, pseudo, total_points, sprite_code, card_code")
+        .select("id, pseudo, season_points, all_time_points, ple_best_player, sprite_code, card_code")
         .eq("id", user.id)
         .single()
 
@@ -43,15 +45,16 @@ export default function DashboardPage() {
 
       const { data: top3Data } = await supabase
         .from("profiles")
-        .select("pseudo, total_points")
-        .order("total_points", { ascending: false })
+        .select("pseudo, season_points")
+        .order("season_points", { ascending: false })
         .limit(3)
 
       setProfile(profileData)
       setStats({
         pronos: pronosCount || 0,
-        points: profileData?.total_points || 0,
-        shows: profileData?.total_points > 0 ? 1 : 0,
+        season_points: profileData?.season_points || 0,
+        all_time_points: profileData?.all_time_points || 0,
+        ple_best_player: profileData?.ple_best_player || 0,
       })
       setNextEvent(nextEventData)
       setTop3(top3Data || [])
@@ -76,51 +79,51 @@ export default function DashboardPage() {
       {/* 📊 Stats rapides */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
         <StatCard label="Pronostics faits" value={stats.pronos} />
-        <StatCard label="Points totaux" value={stats.points} highlight />
-        <StatCard label="Shows joués" value={stats.shows} />
+        <StatCard label="Points saison" value={stats.season_points} highlight />
+        <StatCard label="Points all-time" value={stats.all_time_points} />
       </div>
 
-{/* 🃏 Carte du joueur + Stats secondaires */}
-<div className="flex justify-center">
-  <div className="flex gap-8 items-stretch">
+      {/* 🃏 Carte du joueur + Stats secondaires */}
+      <div className="flex justify-center">
+        <div className="flex gap-8 items-stretch">
 
-    {/* Carte inchangée */}
-    <div className="inline-block border-2 border-neutral-700 rounded-2xl shadow-2xl bg-neutral-900/40 p-3">
-      <img
-        src={cardImage}
-        alt="Carte du joueur"
-        className="block max-w-[520px] w-full h-auto rounded-xl card-pulse"
-      />
-    </div>
+          {/* Carte inchangée */}
+          <div className="inline-block border-2 border-neutral-700 rounded-2xl shadow-2xl bg-neutral-900/40 p-3">
+            <img
+              src={cardImage}
+              alt="Carte du joueur"
+              className="block max-w-[520px] w-full h-auto rounded-xl card-pulse"
+            />
+          </div>
 
-    {/* Cadres à droite */}
-    <div className="flex flex-col justify-between gap-6">
+          {/* Cadres à droite */}
+          <div className="flex flex-col justify-between gap-6">
 
-      <div className="w-56 border border-neutral-700 rounded-xl p-5 bg-neutral-900/60 text-center">
-        <p className="text-sm opacity-70 mb-2">PPW WORLD</p>
-        <p className="text-3xl font-bold text-green-400">
-          {stats.points}
-        </p>
+            <div className="w-56 border border-neutral-700 rounded-xl p-5 bg-neutral-900/60 text-center">
+              <p className="text-sm opacity-70 mb-2">🏆 PPW WORLD</p>
+              <p className="text-3xl font-bold text-green-400">
+                {stats.season_points}
+              </p>
+            </div>
+
+            <div className="w-56 border border-neutral-700 rounded-xl p-5 bg-neutral-900/60 text-center">
+              <p className="text-sm opacity-70 mb-2">⭐ PLE</p>
+              <p className="text-3xl font-bold text-yellow-400">
+                {stats.ple_best_player}
+              </p>
+            </div>
+
+            <div className="w-56 border border-neutral-700 rounded-xl p-5 bg-neutral-900/60 text-center">
+              <p className="text-sm opacity-70 mb-2">👑 ALL TIME</p>
+              <p className="text-3xl font-bold text-purple-400">
+                {stats.all_time_points}
+              </p>
+            </div>
+
+          </div>
+
+        </div>
       </div>
-
-      <div className="w-56 border border-neutral-700 rounded-xl p-5 bg-neutral-900/60 text-center">
-        <p className="text-sm opacity-70 mb-2">PLE</p>
-        <p className="text-3xl font-bold text-green-400">
-          {stats.pronos}
-        </p>
-      </div>
-
-      <div className="w-56 border border-neutral-700 rounded-xl p-5 bg-neutral-900/60 text-center">
-        <p className="text-sm opacity-70 mb-2">ALL TIME</p>
-        <p className="text-3xl font-bold text-green-400">
-          {stats.points}
-        </p>
-      </div>
-
-    </div>
-
-  </div>
-</div>
 
       {/* 🔥 Prochain show */}
       {nextEvent && (
@@ -141,8 +144,8 @@ export default function DashboardPage() {
 
       {/* 👾 Perso 8-bits du joueur */}
       {profile?.sprite_code && (
-  <PixelWalker spriteCode={profile.sprite_code} mode="walk" />
-)}
+        <PixelWalker spriteCode={profile.sprite_code} mode="walk" />
+      )}
 
       {/* 🏆 Classement */}
       <div className="border border-neutral-700 rounded p-4">
@@ -154,7 +157,7 @@ export default function DashboardPage() {
           <ul className="space-y-1">
             {top3.map((p, i) => (
               <li key={i}>
-                {i + 1}. {p.pseudo} — {p.total_points} pts
+                {i + 1}. {p.pseudo} — {p.season_points} pts
               </li>
             ))}
           </ul>
