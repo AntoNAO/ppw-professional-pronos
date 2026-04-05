@@ -44,6 +44,10 @@ export default function Navbar() {
         .eq("id", user.id)
         .single()
 
+      console.log("Navbar loaded")
+      console.log("Navbar profile", profile)
+      console.log("Navbar error", error)
+
       if (error) {
         console.error("Navbar profile error:", error)
         return
@@ -55,8 +59,6 @@ export default function Navbar() {
     }
 
     loadUser()
-
-    console.log("Navbar loaded")
 
     const { data: listener } = supabase.auth.onAuthStateChange(() => {
       loadUser()
