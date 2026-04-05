@@ -34,8 +34,8 @@ export default function HomePage() {
       // 🏆 Top 3
       const { data: leaderboard } = await supabase
         .from("profiles")
-        .select("username, total_points")
-        .order("total_points", { ascending: false })
+        .select("pseudo, season_points")
+        .order("season_points", { ascending: false })
         .limit(3)
 
       if (leaderboard) setTopPlayers(leaderboard)
@@ -167,14 +167,14 @@ export default function HomePage() {
           <div className="max-w-xl mx-auto space-y-4">
             {topPlayers.map((player, index) => (
               <div
-                key={player.username}
+                key={player.pseudo}
                 className="flex justify-between px-6 py-4 bg-neutral-900 rounded-lg border border-neutral-800"
               >
                 <span>
-                  #{index + 1} – {player.username}
+                  #{index + 1} – {player.pseudo}
                 </span>
                 <span className="font-bold">
-                  {player.total_points} pts
+                  {player.season_points} pts
                 </span>
               </div>
             ))}

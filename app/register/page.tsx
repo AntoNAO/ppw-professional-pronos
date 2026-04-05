@@ -46,7 +46,7 @@ export default function RegisterPage() {
     const { error: profileError } = await supabase.from("profiles").insert({
       id: user.id,
       pseudo,
-      total_points: 0,
+      season_points: 0,
       role: "user",
     })
 

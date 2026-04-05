@@ -10,11 +10,10 @@ export default function Navbar() {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
   const [isAdmin, setIsAdmin] = useState(false)
-  const [username, setUsername] = useState<string>("")
+  const [pseudo, setPseudo] = useState<string>("")
   const [points, setPoints] = useState<number>(0)
   const [scrolled, setScrolled] = useState(false)
 
-  // 🔥 Scroll effect
   useEffect(() => {
     const handleScroll = () => {
       setScrolled(window.scrollY > 30)
@@ -23,92 +22,71 @@ export default function Navbar() {
     return () => window.removeEventListener("scroll", handleScroll)
   }, [])
 
-useEffect(() => {
-  const loadUser = async () => {
-    const { data: { user } } = await supabase.auth.getUser()
+  useEffect(() => {
+    const loadUser = async () => {
+      if (!supabase) return
 
-    if (!user) {
-      setUser(null)
-      setIsAdmin(false)
-      setUsername("")
-      setPoints(0)
-      return
+      const { data: { user } } = await supabase.auth.getUser()
+
+      if (!user) {
+        setUser(null)
+        setIsAdmin(false)
+        setPseudo("")
+        setPoints(0)
+        return
+      }
+
+      setUser(user)
+
+      const { data: profile, error } = await supabase
+        .from("profiles")
+        .select("role, pseudo, season_points")
+        .eq("id", user.id)
+        .single()
+
+      if (error) {
+        console.error("Navbar profile error:", error)
+        return
+      }
+
+      setIsAdmin(profile?.role === "admin")
+      setPseudo(profile?.pseudo || "")
+      setPoints(profile?.season_points ?? 0)
     }
 
-    setUser(user)
-
-    const { data: profile, error } = await supabase
-      .from("profiles")
-      .select("role, username, season_points")
-      .eq("id", user.id)
-      .single()
-
-    if (error) {
-      console.error("Navbar profile error:", error)
-      return
-    }
-
-    console.log("Navbar profile:", profile)
-
-    setIsAdmin(profile.role === "admin")
-    setUsername(profile.username || "")
-    setPoints(profile.season_points ?? 0)
-  }
-
-  loadUser()
-
-  const { data: listener } = supabase.auth.onAuthStateChange(() => {
     loadUser()
-  })
 
-  return () => {
-    listener.subscription.unsubscribe()
-  }
-}, [pathname])
+    console.log("Navbar loaded")
+
+    const { data: listener } = supabase.auth.onAuthStateChange(() => {
+      loadUser()
+    })
+
+    return () => {
+      listener?.subscription?.unsubscribe()
+    }
+  }, [pathname])
 
   const handleLogout = async () => {
     await supabase.auth.signOut()
     router.push("/")
   }
 
-  // 🎮 Hover esport + animation
   const linkClass = (path: string) =>
     `relative px-3 py-2 text-sm font-medium transition-all duration-300
      hover:-translate-y-[2px] hover:text-white
      ${pathname === path ? "text-white" : "text-neutral-400 hover:drop-shadow-[0_0_6px_rgba(34,197,94,0.8)]"}`
 
   return (
-    <nav
-      className={`fixed top-0 left-0 w-full z-50 border-b border-neutral-800 transition-all duration-300
-      ${scrolled ? "bg-black/90 backdrop-blur-lg py-3" : "bg-black/70 backdrop-blur-md py-4"}`}
-    >
+    <nav className={`fixed top-0 left-0 w-full z-50 border-b border-neutral-800 transition-all duration-300
+      ${scrolled ? "bg-black/90 backdrop-blur-lg py-3" : "bg-black/70 backdrop-blur-md py-4"}`}>
       <div className="max-w-6xl mx-auto flex items-center justify-between px-6">
-
-        {/* LEFT */}
         <div className="flex items-center gap-6">
-          <Link href="/dashboard" className={linkClass("/dashboard")}>
-            Dashboard
-            {pathname === "/dashboard" && (
-              <span className="absolute left-0 -bottom-1 w-full h-[2px] bg-green-500 shadow-[0_0_12px_#22c55e]" />
-            )}
-          </Link>
-
-          <Link href="/events" className={linkClass("/events")}>
-            Événements
-            {pathname === "/events" && (
-              <span className="absolute left-0 -bottom-1 w-full h-[2px] bg-green-500 shadow-[0_0_12px_#22c55e]" />
-            )}
-          </Link>
-
-          <Link href="/pronostics" className={linkClass("/pronostics")}>
-            Mes pronos
-            {pathname === "/pronostics" && (
-              <span className="absolute left-0 -bottom-1 w-full h-[2px] bg-green-500 shadow-[0_0_12px_#22c55e]" />
-            )}
-          </Link>
+          <Link href="/dashboard" className={linkClass("/dashboard")}>Dashboard</Link>
+          <Link href="/events" className={linkClass("/events")}>Événements</Link>
+          <Link href="/pronostics" className={linkClass("/pronostics")}>Mes pronos</Link>
         </div>
 
-        {/* CENTER LOGO */}
         <Link href="/" className="flex items-center justify-center">
           <img
             src="/ppw-logo.png"
@@ -117,37 +95,12 @@ useEffect(() => {
           />
         </Link>
 
-        {/* RIGHT */}
         <div className="flex items-center gap-6">
-
-          <Link href="/leaderboard" className={linkClass("/leaderboard")}>
-            Classement
-            {pathname === "/leaderboard" && (
-              <span className="absolute left-0 -bottom-1 w-full h-[2px] bg-green-500 shadow-[0_0_12px_#22c55e]" />
-            )}
-          </Link>
-
-          {/* 🔥 ADMIN Glow permanent */}
-          {isAdmin && (
-            <Link
-              href="/admin"
-              className={`relative px-3 py-2 text-sm font-medium transition-all duration-300
-              text-purple-400 hover:text-white
-              animate-pulse
-              ${pathname === "/admin" ? "drop-shadow-[0_0_10px_#a855f7]" : "drop-shadow-[0_0_6px_#a855f7]"}`}
-            >
-              Admin
-              {pathname === "/admin" && (
-                <span className="absolute left-0 -bottom-1 w-full h-[2px] bg-purple-500 shadow-[0_0_12px_#a855f7]" />
-              )}
-            </Link>
-          )}
+          <Link href="/leaderboard" className={linkClass("/leaderboard")}>Classement</Link>
 
           {user && (
             <div className="text-sm text-neutral-300 border-l border-neutral-700 pl-4 flex items-center gap-3">
-              <span className="font-semibold text-white">{username}</span>
-
-              {/* 🏆 Badge points */}
+              <span className="font-semibold text-white">{pseudo}</span>
               <span className="px-3 py-1 text-xs font-bold rounded-full bg-black border border-green-500 text-green-400 shadow-[0_0_8px_rgba(34,197,94,0.6)]">
                 {points} PTS
               </span>
@@ -162,17 +115,12 @@ useEffect(() => {
               Logout
             </button>
           ) : (
-            <Link
-              href="/login"
-              className="px-3 py-1 bg-green-600 rounded hover:bg-green-700 text-sm transition"
-            >
+            <Link href="/login" className="px-3 py-1 bg-green-600 rounded hover:bg-green-700 text-sm transition">
               Login
             </Link>
           )}
         </div>
       </div>
-
-      {/* ⚡ Barre lumineuse animée */}
       <div className="h-[2px] w-full bg-gradient-to-r from-transparent via-green-500 to-transparent animate-pulse" />
     </nav>
   )
