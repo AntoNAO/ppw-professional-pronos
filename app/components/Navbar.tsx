@@ -2,13 +2,14 @@
 
 import Link from "next/link"
 import { useEffect, useState } from "react"
+import { type User } from "@supabase/supabase-js"
 import { supabase } from "@/lib/supabase"
 import { usePathname, useRouter } from "next/navigation"
 
 export default function Navbar() {
   const pathname = usePathname()
   const router = useRouter()
-  const [user, setUser] = useState<any>(null)
+  const [user, setUser] = useState<User | null>(null)
   const [isAdmin, setIsAdmin] = useState(false)
   const [pseudo, setPseudo] = useState<string>("")
   const [points, setPoints] = useState<number>(0)
@@ -23,9 +24,9 @@ export default function Navbar() {
   }, [])
 
   useEffect(() => {
-    const loadUser = async () => {
-      if (!supabase) return
+    if (!supabase) return
 
+    const loadUser = async () => {
       const { data: { user } } = await supabase.auth.getUser()
 
       if (!user) {
@@ -95,6 +96,9 @@ export default function Navbar() {
 
         <div className="flex items-center gap-6">
           <Link href="/leaderboard" className={linkClass("/leaderboard")}>Classement</Link>
+          {isAdmin && (
+            <Link href="/admin" className={linkClass("/admin")}>Admin</Link>
+          )}
 
           {user && (
             <div className="text-sm text-neutral-300 border-l border-neutral-700 pl-4 flex items-center gap-3">
