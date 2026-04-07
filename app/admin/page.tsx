@@ -9,6 +9,7 @@ type Event = {
   starts_at: string
   logo_url: string | null
   image_url: string | null
+  is_big_event: boolean | null
   is_ple: boolean | null
   is_open: boolean
   is_ready: boolean
@@ -34,6 +35,7 @@ export default function AdminPage() {
     starts_at: "",
     logo_url: "",
     image_url: "",
+    is_big_event: false,
     is_ple: false,
     is_open: false,
     is_ready: false,
@@ -129,6 +131,7 @@ export default function AdminPage() {
       starts_at: "",
       logo_url: "",
       image_url: "",
+      is_big_event: false,
       is_ple: false,
       is_open: false,
       is_ready: false,
@@ -283,7 +286,11 @@ export default function AdminPage() {
             type="checkbox"
             checked={eventForm.is_ple}
             onChange={(e) =>
-              setEventForm({ ...eventForm, is_ple: e.target.checked })
+              setEventForm({
+                ...eventForm,
+                is_ple: e.target.checked,
+                is_big_event: e.target.checked,
+              })
             }
           />
           Event PLE
@@ -380,7 +387,10 @@ export default function AdminPage() {
               type="checkbox"
               checked={selectedEvent.is_ple ?? false}
               onChange={(e) =>
-                void updateEventStatus({ is_ple: e.target.checked })
+                void updateEventStatus({
+                  is_ple: e.target.checked,
+                  is_big_event: e.target.checked,
+                })
               }
             />
             Compter cet event comme un PLE
