@@ -1,13 +1,28 @@
 "use client"
 
+import Link from "next/link"
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
-import Link from "next/link"
+
+type EventRow = {
+  id: string
+  name: string
+  image_url: string | null
+  starts_at: string
+  ends_at: string | null
+  is_open: boolean
+  is_ready: boolean
+}
+
+function getEventClosureTimestamp(event: EventRow) {
+  return new Date(event.ends_at || event.starts_at).getTime()
+}
 
 export default function EventsPage() {
-  const [events, setEvents] = useState<any[]>([])
+  const [events, setEvents] = useState<EventRow[]>([])
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState<string | null>(null)
+  const [currentTime, setCurrentTime] = useState(() => Date.now())
 
   useEffect(() => {
     const fetchEvents = async () => {
@@ -20,29 +35,37 @@ export default function EventsPage() {
         console.error(error)
         setError(error.message)
       } else {
-        setEvents(data || [])
+        setEvents((data as EventRow[]) || [])
       }
 
       setLoading(false)
     }
 
-    fetchEvents()
+    void fetchEvents()
+  }, [])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 30000)
+
+    return () => window.clearInterval(intervalId)
   }, [])
 
   if (loading) return <p className="text-white">Chargement...</p>
   if (error) return <p className="text-red-500">Erreur: {error}</p>
-  if (events.length === 0)
-    return <p className="text-white">Aucun événement pour le moment.</p>
+  if (events.length === 0) {
+    return <p className="text-white">Aucun evenement pour le moment.</p>
+  }
 
   return (
     <div className="max-w-6xl mx-auto mt-10 text-white">
-      <h1 className="text-2xl font-bold mb-6">Événements</h1>
+      <h1 className="text-2xl font-bold mb-6">Evenements</h1>
 
       <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
         {events.map((event) => {
-          const now = Date.now()
-          const startsAt = new Date(event.starts_at).getTime()
-          const isPast = now > startsAt
+          const closesAt = getEventClosureTimestamp(event)
+          const isPast = currentTime > closesAt
           const hasBet = false
 
           let badge = ""
@@ -50,18 +73,18 @@ export default function EventsPage() {
           let isClickable = true
 
           if (!event.is_ready) {
-            badge = "🟠 En construction"
+            badge = "En construction"
             badgeClass = "bg-orange-600"
             isClickable = false
           } else if (!event.is_open || isPast) {
-            badge = "🔴 Fermé"
+            badge = "Ferme"
             badgeClass = "bg-red-600"
             isClickable = false
           } else if (hasBet) {
-            badge = "🎯 Déjà parié"
+            badge = "Deja parie"
             badgeClass = "bg-blue-600"
           } else {
-            badge = "🟢 Ouvert"
+            badge = "Ouvert"
             badgeClass = "bg-green-600"
           }
 
@@ -95,7 +118,7 @@ export default function EventsPage() {
 
                   {isClickable && (
                     <span className="text-sm underline opacity-80">
-                      Voir l’événement →
+                      Voir l&apos;evenement -
                     </span>
                   )}
                 </div>

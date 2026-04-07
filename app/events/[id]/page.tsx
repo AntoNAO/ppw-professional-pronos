@@ -9,6 +9,7 @@ type EventRow = {
   id: string
   name: string
   starts_at: string
+  ends_at: string | null
   is_open: boolean
   logo_url: string | null
 }
@@ -51,8 +52,10 @@ export default function EventDetailPage() {
       setMatches((matchesData as MatchRow[]) || [])
 
       if (eventData?.starts_at) {
-        const startsAt = new Date(eventData.starts_at).getTime()
-        setIsClosed(Date.now() > startsAt || eventData.is_open === false)
+        const closesAt = new Date(
+          eventData.ends_at || eventData.starts_at
+        ).getTime()
+        setIsClosed(Date.now() > closesAt || eventData.is_open === false)
       }
 
       const { data: userData } = await supabase.auth.getUser()
