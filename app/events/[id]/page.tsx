@@ -1,16 +1,34 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
 import { useParams } from "next/navigation"
-import { calculatePointsForMatch } from "@/lib/calculatePoints"
+import { supabase } from "@/lib/supabase"
+import { calculatePointsForEvent } from "@/lib/calculatePoints"
+
+type EventRow = {
+  id: string
+  name: string
+  starts_at: string
+  is_open: boolean
+  logo_url: string | null
+}
+
+type MatchRow = {
+  id: string
+  match_type: string | null
+  match_image_url: string | null
+}
+
+type ProfileRow = {
+  role: string | null
+}
 
 export default function EventDetailPage() {
   const params = useParams()
   const eventId = params.id as string
 
-  const [event, setEvent] = useState<any>(null)
-  const [matches, setMatches] = useState<any[]>([])
+  const [event, setEvent] = useState<EventRow | null>(null)
+  const [matches, setMatches] = useState<MatchRow[]>([])
   const [predictions, setPredictions] = useState<Record<string, string>>({})
   const [isClosed, setIsClosed] = useState(false)
   const [loading, setLoading] = useState(true)
@@ -26,11 +44,11 @@ export default function EventDetailPage() {
 
       const { data: matchesData } = await supabase
         .from("matches")
-        .select("*")
+        .select("id, match_type, match_image_url")
         .eq("event_id", eventId)
 
-      setEvent(eventData)
-      setMatches(matchesData || [])
+      setEvent((eventData as EventRow | null) ?? null)
+      setMatches((matchesData as MatchRow[]) || [])
 
       if (eventData?.starts_at) {
         const startsAt = new Date(eventData.starts_at).getTime()
@@ -38,6 +56,7 @@ export default function EventDetailPage() {
       }
 
       const { data: userData } = await supabase.auth.getUser()
+
       if (userData.user) {
         const { data: profile } = await supabase
           .from("profiles")
@@ -45,22 +64,23 @@ export default function EventDetailPage() {
           .eq("id", userData.user.id)
           .single()
 
-        setIsAdmin(profile?.role === "admin")
+        setIsAdmin(((profile as ProfileRow | null) ?? null)?.role === "admin")
       }
 
       setLoading(false)
     }
 
-    fetchData()
+    void fetchData()
   }, [eventId])
 
   const handleChange = (matchId: string, value: string) => {
     if (isClosed) return
+
     setPredictions((prev) => ({ ...prev, [matchId]: value }))
   }
 
   const handleSubmit = async () => {
-    if (isClosed) return alert("Pronos fermés")
+    if (isClosed) return alert("Pronos fermes")
 
     const { data: userData } = await supabase.auth.getUser()
     if (!userData.user) return alert("Connecte-toi")
@@ -72,14 +92,25 @@ export default function EventDetailPage() {
     }))
 
     await supabase.from("predictions").insert(inserts)
-    alert("Pronostics enregistrés 🔥")
+    alert("Pronostics enregistres")
+  }
+
+  const handleAdminCalculation = async () => {
+    try {
+      await calculatePointsForEvent(eventId)
+      alert("Points et titres mis a jour")
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erreur pendant le calcul"
+
+      alert(message)
+    }
   }
 
   if (loading) return <p className="text-white">Chargement...</p>
 
   return (
     <div className="max-w-4xl mx-auto mt-10 text-white">
-
       {event?.logo_url && (
         <div className="flex justify-center mb-8">
           <img
@@ -95,27 +126,24 @@ export default function EventDetailPage() {
           key={match.id}
           className="border border-neutral-700 rounded-xl p-6 mb-6 bg-neutral-900/40"
         >
-          {/* Type de match */}
           <p className="text-center text-green-400 font-bold mb-2 uppercase">
             {match.match_type}
           </p>
 
-          {/* Image du match */}
           {match.match_image_url && (
             <div className="flex justify-center mb-4">
               <img
                 src={match.match_image_url}
-                alt={match.match_type}
+                alt={match.match_type || "Match"}
                 className="max-h-[400px] object-contain rounded"
               />
             </div>
           )}
 
-          {/* Input prono */}
           <input
             disabled={isClosed}
             className="border p-3 rounded w-full text-white placeholder-neutral-300 bg-neutral-800"
-            placeholder="👉 Ton prono (ex: Roman Reigns)"
+            placeholder="Ton prono (ex: Roman Reigns)"
             onChange={(e) => handleChange(match.id, e.target.value)}
           />
         </div>
@@ -134,15 +162,10 @@ export default function EventDetailPage() {
       {isAdmin && (
         <div className="mt-8 text-center">
           <button
-            onClick={async () => {
-              for (const match of matches) {
-                await calculatePointsForMatch(match.id)
-              }
-              alert("Points calculés ✅")
-            }}
+            onClick={handleAdminCalculation}
             className="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded"
           >
-            ⚙️ Calculer les points (admin)
+            Calculer points et titres
           </button>
         </div>
       )}

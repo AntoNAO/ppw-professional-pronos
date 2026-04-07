@@ -1,8 +1,8 @@
 "use client"
 
 import { useState } from "react"
-import { supabase } from "../../lib/supabase"
 import { useRouter } from "next/navigation"
+import { supabase } from "../../lib/supabase"
 
 export default function RegisterPage() {
   const router = useRouter()
@@ -20,7 +20,6 @@ export default function RegisterPage() {
     if (loading) return
     setLoading(true)
 
-    // 1️⃣ Création du compte
     const { data, error } = await supabase.auth.signUp({
       email,
       password,
@@ -32,38 +31,41 @@ export default function RegisterPage() {
       return
     }
 
-    // ⚠️ Supabase peut mettre user dans data.user OU data.session.user
     const user = data.user ?? data.session?.user
 
     if (!user) {
-      alert("Compte créé, mais vérifie ton email pour activer le compte.")
+      alert("Compte cree, mais verifie ton email pour l'activer.")
       setLoading(false)
       router.push("/login")
       return
     }
 
-    // 2️⃣ Création du profil
     const { error: profileError } = await supabase.from("profiles").insert({
       id: user.id,
       pseudo,
       season_points: 0,
+      all_time_points: 0,
+      ple_best_player: 0,
+      ppw_world_titles: 0,
+      ple_titles: 0,
+      all_time_titles: 0,
       role: "user",
     })
 
     if (profileError) {
-      alert("Erreur création profil : " + profileError.message)
+      alert("Erreur creation profil : " + profileError.message)
       setLoading(false)
       return
     }
 
     setLoading(false)
-    alert("Compte créé ! Tu peux te connecter maintenant.")
+    alert("Compte cree ! Tu peux te connecter maintenant.")
     router.push("/login")
   }
 
   return (
     <div className="flex flex-col gap-4 max-w-md mx-auto mt-20">
-      <h1 className="text-2xl font-bold text-white">Créer un compte</h1>
+      <h1 className="text-2xl font-bold text-white">Creer un compte</h1>
 
       <input
         className="border p-2 rounded"
@@ -93,7 +95,7 @@ export default function RegisterPage() {
         onClick={handleRegister}
         disabled={loading}
       >
-        {loading ? "Création en cours..." : "Créer mon compte"}
+        {loading ? "Creation en cours..." : "Creer mon compte"}
       </button>
     </div>
   )
