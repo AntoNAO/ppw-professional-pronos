@@ -28,7 +28,8 @@ begin
   update public.profiles
   set
     season_points = 0,
-    all_time_points = 0;
+    all_time_points = 0
+  where true;
 
   with totals as (
     select
@@ -63,7 +64,8 @@ begin
     ppw_world_titles = 0,
     ple_titles = 0,
     all_time_titles = 0,
-    ple_best_player = 0;
+    ple_best_player = 0
+  where true;
 
   select coalesce(max(season_points), 0)::integer
   into season_max
