@@ -9,7 +9,7 @@ type PredictionRow = {
   is_correct: boolean | null
   match: {
     id: string
-    match_title: string
+    match_type: string | null
     winner: string | null
     event: {
       id: string
@@ -20,14 +20,25 @@ type PredictionRow = {
   }
 }
 
+type GroupedPredictions = Record<
+  string,
+  {
+    event: PredictionRow["match"]["event"]
+    items: PredictionRow[]
+  }
+>
+
 export default function MyPredictionsPage() {
   const [predictions, setPredictions] = useState<PredictionRow[]>([])
   const [loading, setLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState<string | null>(null)
+  const [currentTime, setCurrentTime] = useState(() => Date.now())
 
   useEffect(() => {
     const fetchPredictions = async () => {
       const { data: userData } = await supabase.auth.getUser()
       const user = userData.user
+
       if (!user) {
         setLoading(false)
         return
@@ -41,7 +52,7 @@ export default function MyPredictionsPage() {
           is_correct,
           match:matches (
             id,
-            match_title,
+            match_type,
             winner,
             event:events (
               id,
@@ -53,27 +64,43 @@ export default function MyPredictionsPage() {
         `)
         .eq("user_id", user.id)
 
-      if (error) console.error(error)
-      else setPredictions(data as any)
+      if (error) {
+        console.error(error)
+        setErrorMessage(error.message)
+      } else {
+        setPredictions((data as PredictionRow[]) || [])
+      }
 
       setLoading(false)
     }
 
-    fetchPredictions()
+    void fetchPredictions()
+  }, [])
+
+  useEffect(() => {
+    const intervalId = window.setInterval(() => {
+      setCurrentTime(Date.now())
+    }, 30000)
+
+    return () => window.clearInterval(intervalId)
   }, [])
 
   if (loading) return <p className="text-white">Chargement...</p>
-  if (!predictions.length)
-    return <p className="text-white">Tu n’as encore fait aucun prono.</p>
+  if (errorMessage) {
+    return <p className="text-red-500">Erreur: {errorMessage}</p>
+  }
+  if (!predictions.length) {
+    return <p className="text-white">Tu n&apos;as encore fait aucun prono.</p>
+  }
 
-  const now = Date.now()
+  const groupedByEvent = predictions.reduce<GroupedPredictions>((acc, prediction) => {
+    const eventId = prediction.match.event.id
 
-  const groupedByEvent = predictions.reduce((acc: any, p) => {
-    const eventId = p.match.event.id
     if (!acc[eventId]) {
-      acc[eventId] = { event: p.match.event, items: [] }
+      acc[eventId] = { event: prediction.match.event, items: [] }
     }
-    acc[eventId].items.push(p)
+
+    acc[eventId].items.push(prediction)
     return acc
   }, {})
 
@@ -81,10 +108,10 @@ export default function MyPredictionsPage() {
     <div className="max-w-4xl mx-auto mt-10 text-white">
       <h1 className="text-2xl font-bold mb-6">Mes pronostics</h1>
 
-      {Object.values(groupedByEvent).map((group: any) => {
-        const totalCorrect = group.items.filter((p: any) => p.is_correct).length
+      {Object.values(groupedByEvent).map((group) => {
+        const totalCorrect = group.items.filter((item) => item.is_correct).length
         const totalWrong = group.items.filter(
-          (p: any) => p.is_correct === false
+          (item) => item.is_correct === false
         ).length
         const totalPoints = totalCorrect
 
@@ -93,13 +120,13 @@ export default function MyPredictionsPage() {
           ? new Date(group.event.ends_at).getTime()
           : null
 
-        let statusLabel = "Show à venir"
+        let statusLabel = "Show a venir"
         let statusColor = "border-white text-white"
 
-        if (endsAt && now >= endsAt) {
-          statusLabel = "Show terminé"
+        if (endsAt && currentTime >= endsAt) {
+          statusLabel = "Show termine"
           statusColor = "border-green-500 text-green-400"
-        } else if (now >= startsAt) {
+        } else if (currentTime >= startsAt) {
           statusLabel = "Show en cours"
           statusColor = "border-orange-500 text-orange-400"
         }
@@ -120,41 +147,38 @@ export default function MyPredictionsPage() {
               <span className="text-sm font-semibold">{statusLabel}</span>
             </div>
 
-            {/* Résumé */}
             <div className="mb-3 text-sm">
-              ✔️ {totalCorrect} bons pronos &nbsp;|&nbsp; ❌ {totalWrong} mauvais
-              &nbsp;|&nbsp; 🏆 {totalPoints} points
+              {totalCorrect} bons pronos | {totalWrong} mauvais | {totalPoints}{" "}
+              points
             </div>
 
-            {group.items.map((p: any) => (
+            {group.items.map((prediction) => (
               <div
-                key={p.id}
+                key={prediction.id}
                 className={`border-b border-neutral-700 pb-2 mb-2 ${
-                  p.is_correct === true
+                  prediction.is_correct === true
                     ? "text-green-400"
-                    : p.is_correct === false
-                    ? "text-red-400"
-                    : "text-neutral-400"
+                    : prediction.is_correct === false
+                      ? "text-red-400"
+                      : "text-neutral-400"
                 }`}
               >
                 <p className="font-semibold text-white">
-                  {p.match.match_title}
+                  {prediction.match.match_type || "Match"}
                 </p>
                 <p>
                   Ton prono :{" "}
-                  <span className="font-bold">{p.prediction}</span>
+                  <span className="font-bold">{prediction.prediction}</span>
                 </p>
 
-                {p.match.winner ? (
+                {prediction.match.winner ? (
                   <p>
-                    Résultat :{" "}
-                    <span className="font-bold">{p.match.winner}</span>{" "}
-                    {p.is_correct ? "✅" : "❌"}
+                    Resultat :{" "}
+                    <span className="font-bold">{prediction.match.winner}</span>{" "}
+                    {prediction.is_correct ? "OK" : "KO"}
                   </p>
                 ) : (
-                  <p className="opacity-60">
-                    Résultat pas encore disponible
-                  </p>
+                  <p className="opacity-60">Resultat pas encore disponible</p>
                 )}
               </div>
             ))}
