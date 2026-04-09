@@ -18,6 +18,23 @@ $$;
 
 grant execute on function public.increment_user_points(uuid, integer) to authenticated;
 
+create or replace function public.normalize_pick_text(input_text text)
+returns text
+language sql
+immutable
+as $$
+  select trim(
+    regexp_replace(
+      lower(coalesce(input_text, '')),
+      '[^a-z0-9]+',
+      ' ',
+      'g'
+    )
+  );
+$$;
+
+grant execute on function public.normalize_pick_text(text) to authenticated;
+
 create or replace function public.sync_profile_points()
 returns void
 language plpgsql
@@ -147,9 +164,20 @@ as $$
 begin
   update public.predictions p
   set
-    is_correct = lower(btrim(p.prediction)) = lower(btrim(m.winner)),
+    is_correct = case
+      when public.normalize_pick_text(p.prediction) = '' then false
+      when public.normalize_pick_text(m.winner) = '' then false
+      when public.normalize_pick_text(p.prediction) = public.normalize_pick_text(m.winner) then true
+      when position(public.normalize_pick_text(p.prediction) in public.normalize_pick_text(m.winner)) > 0 then true
+      when position(public.normalize_pick_text(m.winner) in public.normalize_pick_text(p.prediction)) > 0 then true
+      else false
+    end,
     correct_answers = case
-      when lower(btrim(p.prediction)) = lower(btrim(m.winner)) then 1
+      when public.normalize_pick_text(p.prediction) = '' then 0
+      when public.normalize_pick_text(m.winner) = '' then 0
+      when public.normalize_pick_text(p.prediction) = public.normalize_pick_text(m.winner) then 1
+      when position(public.normalize_pick_text(p.prediction) in public.normalize_pick_text(m.winner)) > 0 then 1
+      when position(public.normalize_pick_text(m.winner) in public.normalize_pick_text(p.prediction)) > 0 then 1
       else 0
     end
   from public.matches m
