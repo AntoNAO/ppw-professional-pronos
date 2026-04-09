@@ -19,6 +19,12 @@ type MatchRow = {
   match_image_url: string | null
 }
 
+type UserPredictionRow = {
+  id: string
+  match_id: string
+  prediction: string
+}
+
 export default function EventDetailPage() {
   const params = useParams()
   const eventId = params.id as string
@@ -28,6 +34,9 @@ export default function EventDetailPage() {
   const [predictions, setPredictions] = useState<Record<string, string>>({})
   const [isClosed, setIsClosed] = useState(false)
   const [loading, setLoading] = useState(true)
+  const hasSavedPredictions = matches.some(
+    (match) => (predictions[match.id] || "").trim().length > 0
+  )
 
   useEffect(() => {
     const fetchData = async () => {
@@ -41,15 +50,48 @@ export default function EventDetailPage() {
         .from("matches")
         .select("id, match_type, match_image_url")
         .eq("event_id", eventId)
+        .order("display_order", { ascending: true })
+
+      const loadedMatches = (matchesData as MatchRow[]) || []
 
       setEvent((eventData as EventRow | null) ?? null)
-      setMatches((matchesData as MatchRow[]) || [])
+      setMatches(loadedMatches)
 
       if (eventData?.starts_at) {
         const closesAt = new Date(
           eventData.ends_at || eventData.starts_at
         ).getTime()
         setIsClosed(Date.now() > closesAt || eventData.is_open === false)
+      }
+
+      const { data: userData } = await supabase.auth.getUser()
+      const user = userData.user
+
+      if (user && loadedMatches.length > 0) {
+        const { data: existingPredictions, error: predictionsError } =
+          await supabase
+            .from("predictions")
+            .select("id, match_id, prediction")
+            .eq("user_id", user.id)
+            .in(
+              "match_id",
+              loadedMatches.map((match) => match.id)
+            )
+
+        if (predictionsError) {
+          console.error("Event predictions load error:", predictionsError)
+        } else {
+          const predictionMap = ((existingPredictions as UserPredictionRow[]) || []).reduce<
+            Record<string, string>
+          >((acc, prediction) => {
+            acc[prediction.match_id] = prediction.prediction
+            return acc
+          }, {})
+
+          setPredictions(predictionMap)
+        }
+      } else {
+        setPredictions({})
       }
 
       setLoading(false)
@@ -68,15 +110,81 @@ export default function EventDetailPage() {
     if (isClosed) return alert("Pronos fermes")
 
     const { data: userData } = await supabase.auth.getUser()
-    if (!userData.user) return alert("Connecte-toi")
+    const user = userData.user
 
-    const inserts = Object.entries(predictions).map(([matchId, prediction]) => ({
-      user_id: userData.user.id,
-      match_id: matchId,
-      prediction,
-    }))
+    if (!user) return alert("Connecte-toi")
 
-    await supabase.from("predictions").insert(inserts)
+    const entries = Object.entries(predictions)
+      .map(([matchId, prediction]) => ({
+        matchId,
+        prediction: prediction.trim(),
+      }))
+      .filter((entry) => entry.prediction.length > 0)
+
+    if (entries.length === 0) {
+      return alert("Ajoute au moins un prono avant de valider.")
+    }
+
+    const { data: existingPredictions, error: existingError } = await supabase
+      .from("predictions")
+      .select("id, match_id, prediction")
+      .eq("user_id", user.id)
+      .in(
+        "match_id",
+        entries.map((entry) => entry.matchId)
+      )
+
+    if (existingError) {
+      alert("Erreur chargement pronos existants : " + existingError.message)
+      return
+    }
+
+    const existingByMatchId = new Map(
+      ((existingPredictions as UserPredictionRow[]) || []).map((prediction) => [
+        prediction.match_id,
+        prediction,
+      ])
+    )
+
+    const predictionsToInsert = entries
+      .filter((entry) => !existingByMatchId.has(entry.matchId))
+      .map((entry) => ({
+        user_id: user.id,
+        match_id: entry.matchId,
+        prediction: entry.prediction,
+      }))
+
+    const predictionsToUpdate = entries.filter((entry) =>
+      existingByMatchId.has(entry.matchId)
+    )
+
+    if (predictionsToInsert.length > 0) {
+      const { error: insertError } = await supabase
+        .from("predictions")
+        .insert(predictionsToInsert)
+
+      if (insertError) {
+        alert("Erreur enregistrement pronos : " + insertError.message)
+        return
+      }
+    }
+
+    for (const entry of predictionsToUpdate) {
+      const existingPrediction = existingByMatchId.get(entry.matchId)
+
+      if (!existingPrediction) continue
+
+      const { error: updateError } = await supabase
+        .from("predictions")
+        .update({ prediction: entry.prediction })
+        .eq("id", existingPrediction.id)
+
+      if (updateError) {
+        alert("Erreur mise a jour pronos : " + updateError.message)
+        return
+      }
+    }
+
     alert("Pronostics enregistres")
   }
 
@@ -117,10 +225,20 @@ export default function EventDetailPage() {
             disabled={isClosed}
             className="border p-3 rounded w-full text-white placeholder-neutral-300 bg-neutral-800"
             placeholder="Ton prono (ex: Roman Reigns)"
+            value={predictions[match.id] || ""}
             onChange={(e) => handleChange(match.id, e.target.value)}
           />
         </div>
       ))}
+
+      <div className="mt-4">
+        {hasSavedPredictions && !isClosed && (
+          <p className="text-center text-sm text-neutral-300 mb-3">
+            Tes pronos deja enregistres sont charges ici. Tu peux les modifier
+            puis enregistrer de nouveau.
+          </p>
+        )}
+      </div>
 
       <div className="flex justify-center">
         <button
@@ -128,7 +246,9 @@ export default function EventDetailPage() {
           onClick={handleSubmit}
           className="px-6 py-3 rounded mt-4 font-bold bg-green-600 hover:bg-green-700"
         >
-          Valider mes pronos pour le show
+          {hasSavedPredictions
+            ? "Mettre a jour mes pronos"
+            : "Valider mes pronos pour le show"}
         </button>
       </div>
     </div>
