@@ -3,7 +3,6 @@
 import { useEffect, useState } from "react"
 import { useParams } from "next/navigation"
 import { supabase } from "@/lib/supabase"
-import { calculatePointsForEvent } from "@/lib/calculatePoints"
 
 type EventRow = {
   id: string
@@ -20,10 +19,6 @@ type MatchRow = {
   match_image_url: string | null
 }
 
-type ProfileRow = {
-  role: string | null
-}
-
 export default function EventDetailPage() {
   const params = useParams()
   const eventId = params.id as string
@@ -33,7 +28,6 @@ export default function EventDetailPage() {
   const [predictions, setPredictions] = useState<Record<string, string>>({})
   const [isClosed, setIsClosed] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [isAdmin, setIsAdmin] = useState(false)
 
   useEffect(() => {
     const fetchData = async () => {
@@ -56,18 +50,6 @@ export default function EventDetailPage() {
           eventData.ends_at || eventData.starts_at
         ).getTime()
         setIsClosed(Date.now() > closesAt || eventData.is_open === false)
-      }
-
-      const { data: userData } = await supabase.auth.getUser()
-
-      if (userData.user) {
-        const { data: profile } = await supabase
-          .from("profiles")
-          .select("role")
-          .eq("id", userData.user.id)
-          .single()
-
-        setIsAdmin(((profile as ProfileRow | null) ?? null)?.role === "admin")
       }
 
       setLoading(false)
@@ -96,18 +78,6 @@ export default function EventDetailPage() {
 
     await supabase.from("predictions").insert(inserts)
     alert("Pronostics enregistres")
-  }
-
-  const handleAdminCalculation = async () => {
-    try {
-      await calculatePointsForEvent(eventId)
-      alert("Points et titres mis a jour")
-    } catch (error) {
-      const message =
-        error instanceof Error ? error.message : "Erreur pendant le calcul"
-
-      alert(message)
-    }
   }
 
   if (loading) return <p className="text-white">Chargement...</p>
@@ -161,17 +131,6 @@ export default function EventDetailPage() {
           Valider mes pronos pour le show
         </button>
       </div>
-
-      {isAdmin && (
-        <div className="mt-8 text-center">
-          <button
-            onClick={handleAdminCalculation}
-            className="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded"
-          >
-            Calculer points et titres
-          </button>
-        </div>
-      )}
     </div>
   )
 }

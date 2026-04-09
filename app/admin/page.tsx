@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import { calculatePointsForEvent } from "@/lib/calculatePoints"
 
 type Event = {
   id: string
@@ -218,6 +219,20 @@ export default function AdminPage() {
     await fetchMatches(selectedEvent.id)
   }
 
+  const handleCalculatePoints = async () => {
+    if (!selectedEvent) return
+
+    try {
+      await calculatePointsForEvent(selectedEvent.id)
+      alert("Points et titres mis a jour")
+    } catch (error) {
+      const message =
+        error instanceof Error ? error.message : "Erreur pendant le calcul"
+
+      alert(message)
+    }
+  }
+
   if (!isAdmin) {
     return <p className="text-white p-10">Acces admin uniquement</p>
   }
@@ -395,6 +410,13 @@ export default function AdminPage() {
             />
             Compter cet event comme un PLE
           </label>
+
+          <button
+            onClick={handleCalculatePoints}
+            className="bg-blue-600 hover:bg-blue-700 px-5 py-2 rounded"
+          >
+            Calculer points et titres
+          </button>
         </div>
       )}
 
