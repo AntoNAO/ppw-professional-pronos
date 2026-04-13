@@ -30,6 +30,11 @@ export default function AdminPage() {
   const [selectedEventId, setSelectedEventId] = useState("")
   const [selectedEvent, setSelectedEvent] = useState<Event | null>(null)
   const [matches, setMatches] = useState<Match[]>([])
+  const [eventVisualForm, setEventVisualForm] = useState({
+    logo_url: "",
+    image_url: "",
+  })
+  const [matchImagePrefix, setMatchImagePrefix] = useState("")
 
   const [eventForm, setEventForm] = useState({
     name: "",
@@ -99,6 +104,10 @@ export default function AdminPage() {
     if (!event) return
 
     setSelectedEvent(event)
+    setEventVisualForm({
+      logo_url: event.logo_url || "",
+      image_url: event.image_url || "",
+    })
     await fetchMatches(event.id)
   }
 
@@ -124,6 +133,10 @@ export default function AdminPage() {
       setEvents((prev) => [newEvent, ...prev])
       setSelectedEventId(newEvent.id)
       setSelectedEvent(newEvent)
+      setEventVisualForm({
+        logo_url: newEvent.logo_url || "",
+        image_url: newEvent.image_url || "",
+      })
       await fetchMatches(newEvent.id)
     }
 
@@ -231,6 +244,71 @@ export default function AdminPage() {
 
       alert(message)
     }
+  }
+
+  const saveEventVisuals = async () => {
+    if (!selectedEvent) return
+
+    const updates = {
+      logo_url: eventVisualForm.logo_url.trim() || null,
+      image_url: eventVisualForm.image_url.trim() || null,
+    }
+
+    const { error } = await supabase
+      .from("events")
+      .update(updates)
+      .eq("id", selectedEvent.id)
+
+    if (error) {
+      alert(error.message)
+      return
+    }
+
+    const updatedEvent = {
+      ...selectedEvent,
+      ...updates,
+    }
+
+    setSelectedEvent(updatedEvent)
+    setEvents((prev) =>
+      prev.map((event) => (event.id === updatedEvent.id ? updatedEvent : event))
+    )
+
+    alert("Visuels de l'event mis a jour")
+  }
+
+  const applyMatchImagePrefix = async () => {
+    if (!selectedEvent) return
+    if (matches.length === 0) {
+      alert("Aucun match a mettre a jour pour cet event.")
+      return
+    }
+
+    const prefix = matchImagePrefix.trim()
+
+    if (!prefix) {
+      alert("Ajoute un prefixe comme WM42 avant de lancer le remplissage.")
+      return
+    }
+
+    const updateResults = await Promise.all(
+      matches.map((match, index) =>
+        supabase
+          .from("matches")
+          .update({ match_image_url: `/matches/${prefix}${index + 1}.jpg` })
+          .eq("id", match.id)
+      )
+    )
+
+    const failedUpdate = updateResults.find((result) => result.error)
+
+    if (failedUpdate?.error) {
+      alert(failedUpdate.error.message)
+      return
+    }
+
+    await fetchMatches(selectedEvent.id)
+    alert("Images des matchs remplies automatiquement")
   }
 
   if (!isAdmin) {
@@ -422,6 +500,61 @@ export default function AdminPage() {
 
       {selectedEvent && (
         <div className="bg-neutral-900 p-6 rounded-2xl border border-neutral-800 space-y-4">
+          <h2 className="font-bold">Visuels de l&apos;event</h2>
+
+          <p className="text-sm text-neutral-300">
+            Tu peux utiliser les fichiers du dossier `public`, par exemple
+            `/ppv/wm42.jpg` et `/ppv-logos/wm42.png`.
+          </p>
+
+          <input
+            className="input"
+            placeholder="Logo URL"
+            value={eventVisualForm.logo_url}
+            onChange={(e) =>
+              setEventVisualForm({
+                ...eventVisualForm,
+                logo_url: e.target.value,
+              })
+            }
+          />
+
+          {eventVisualForm.logo_url && (
+            <img
+              src={eventVisualForm.logo_url}
+              alt="Logo event"
+              className="h-20 object-contain rounded border"
+            />
+          )}
+
+          <input
+            className="input"
+            placeholder="Image fond"
+            value={eventVisualForm.image_url}
+            onChange={(e) =>
+              setEventVisualForm({
+                ...eventVisualForm,
+                image_url: e.target.value,
+              })
+            }
+          />
+
+          {eventVisualForm.image_url && (
+            <img
+              src={eventVisualForm.image_url}
+              alt="Fond event"
+              className="h-32 object-cover rounded border"
+            />
+          )}
+
+          <button onClick={saveEventVisuals} className="btn">
+            Sauvegarder les visuels
+          </button>
+        </div>
+      )}
+
+      {selectedEvent && (
+        <div className="bg-neutral-900 p-6 rounded-2xl border border-neutral-800 space-y-4">
           <h2 className="font-bold">Gestion des matchs</h2>
 
           <input
@@ -453,6 +586,25 @@ export default function AdminPage() {
           <button onClick={createMatch} className="btn">
             Ajouter le match
           </button>
+
+          <div className="border border-neutral-700 rounded-xl p-4 space-y-3">
+            <p className="font-semibold">Remplissage auto des images</p>
+            <p className="text-sm text-neutral-300">
+              Exemple: avec `WM42`, le site va mettre `/matches/WM421.jpg`,
+              puis `/matches/WM422.jpg`, etc selon l&apos;ordre des matchs.
+            </p>
+
+            <input
+              className="input"
+              placeholder="Prefixe des images (ex: WM42)"
+              value={matchImagePrefix}
+              onChange={(e) => setMatchImagePrefix(e.target.value)}
+            />
+
+            <button onClick={applyMatchImagePrefix} className="btn">
+              Remplir les images des matchs
+            </button>
+          </div>
 
           <ul className="space-y-2 mt-4">
             {matches.map((match, index) => (
