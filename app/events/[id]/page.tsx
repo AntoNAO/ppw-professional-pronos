@@ -33,10 +33,12 @@ export default function EventDetailPage() {
   const [matches, setMatches] = useState<MatchRow[]>([])
   const [predictions, setPredictions] = useState<Record<string, string>>({})
   const [isClosed, setIsClosed] = useState(false)
+  const [savedPredictionCount, setSavedPredictionCount] = useState(0)
+  const [isSubmitted, setIsSubmitted] = useState(false)
+  const [isSubmitting, setIsSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
-  const hasSavedPredictions = matches.some(
-    (match) => (predictions[match.id] || "").trim().length > 0
-  )
+  const hasDraftPredictions =
+    savedPredictionCount > 0 && savedPredictionCount < matches.length
 
   useEffect(() => {
     const fetchData = async () => {
@@ -81,7 +83,8 @@ export default function EventDetailPage() {
         if (predictionsError) {
           console.error("Event predictions load error:", predictionsError)
         } else {
-          const predictionMap = ((existingPredictions as UserPredictionRow[]) || []).reduce<
+          const loadedPredictions = (existingPredictions as UserPredictionRow[]) || []
+          const predictionMap = loadedPredictions.reduce<
             Record<string, string>
           >((acc, prediction) => {
             acc[prediction.match_id] = prediction.prediction
@@ -89,9 +92,16 @@ export default function EventDetailPage() {
           }, {})
 
           setPredictions(predictionMap)
+          setSavedPredictionCount(loadedPredictions.length)
+          setIsSubmitted(
+            loadedMatches.length > 0 &&
+              loadedPredictions.length === loadedMatches.length
+          )
         }
       } else {
         setPredictions({})
+        setSavedPredictionCount(0)
+        setIsSubmitted(false)
       }
 
       setLoading(false)
@@ -101,91 +111,81 @@ export default function EventDetailPage() {
   }, [eventId])
 
   const handleChange = (matchId: string, value: string) => {
-    if (isClosed) return
+    if (isClosed || isSubmitted || isSubmitting) return
 
     setPredictions((prev) => ({ ...prev, [matchId]: value }))
   }
 
   const handleSubmit = async () => {
     if (isClosed) return alert("Pronos fermes")
+    if (isSubmitted) {
+      return alert("Tu as deja valide tes pronos pour ce show.")
+    }
 
     const { data: userData } = await supabase.auth.getUser()
     const user = userData.user
 
     if (!user) return alert("Connecte-toi")
+    if (matches.length === 0) return alert("Aucun match disponible pour ce show.")
 
-    const entries = Object.entries(predictions)
-      .map(([matchId, prediction]) => ({
-        matchId,
-        prediction: prediction.trim(),
-      }))
-      .filter((entry) => entry.prediction.length > 0)
+    const entries = matches.map((match) => ({
+      matchId: match.id,
+      prediction: (predictions[match.id] || "").trim(),
+    }))
 
-    if (entries.length === 0) {
-      return alert("Ajoute au moins un prono avant de valider.")
+    const hasEmptyPrediction = entries.some(
+      (entry) => entry.prediction.length === 0
+    )
+
+    if (hasEmptyPrediction) {
+      return alert("Tu dois remplir tous les matchs avant la validation finale.")
     }
 
-    const { data: existingPredictions, error: existingError } = await supabase
-      .from("predictions")
-      .select("id, match_id, prediction")
-      .eq("user_id", user.id)
-      .in(
-        "match_id",
-        entries.map((entry) => entry.matchId)
-      )
+    setIsSubmitting(true)
 
-    if (existingError) {
-      alert("Erreur chargement pronos existants : " + existingError.message)
+    const { error } = await supabase.rpc("submit_event_predictions", {
+      event_id_input: eventId,
+      predictions_input: entries.map((entry) => ({
+        match_id: entry.matchId,
+        prediction: entry.prediction,
+      })),
+    })
+
+    setIsSubmitting(false)
+
+    if (error) {
+      if (error.message.includes("submit_event_predictions")) {
+        alert(
+          "La fonction SQL de validation finale n'est pas encore installee dans Supabase."
+        )
+        return
+      }
+
+      if (error.message.includes("ALREADY_SUBMITTED")) {
+        setIsSubmitted(true)
+        setSavedPredictionCount(matches.length)
+        alert("Tu as deja valide tes pronos pour ce show.")
+        return
+      }
+
+      if (error.message.includes("INVALID_PREDICTIONS_SET")) {
+        alert("Tous les matchs doivent avoir un prono valide avant d'envoyer.")
+        return
+      }
+
+      if (error.message.includes("EVENT_CLOSED")) {
+        setIsClosed(true)
+        alert("Les pronos sont fermes pour ce show.")
+        return
+      }
+
+      alert("Erreur validation finale : " + error.message)
       return
     }
 
-    const existingByMatchId = new Map(
-      ((existingPredictions as UserPredictionRow[]) || []).map((prediction) => [
-        prediction.match_id,
-        prediction,
-      ])
-    )
-
-    const predictionsToInsert = entries
-      .filter((entry) => !existingByMatchId.has(entry.matchId))
-      .map((entry) => ({
-        user_id: user.id,
-        match_id: entry.matchId,
-        prediction: entry.prediction,
-      }))
-
-    const predictionsToUpdate = entries.filter((entry) =>
-      existingByMatchId.has(entry.matchId)
-    )
-
-    if (predictionsToInsert.length > 0) {
-      const { error: insertError } = await supabase
-        .from("predictions")
-        .insert(predictionsToInsert)
-
-      if (insertError) {
-        alert("Erreur enregistrement pronos : " + insertError.message)
-        return
-      }
-    }
-
-    for (const entry of predictionsToUpdate) {
-      const existingPrediction = existingByMatchId.get(entry.matchId)
-
-      if (!existingPrediction) continue
-
-      const { error: updateError } = await supabase
-        .from("predictions")
-        .update({ prediction: entry.prediction })
-        .eq("id", existingPrediction.id)
-
-      if (updateError) {
-        alert("Erreur mise a jour pronos : " + updateError.message)
-        return
-      }
-    }
-
-    alert("Pronostics enregistres")
+    setSavedPredictionCount(matches.length)
+    setIsSubmitted(true)
+    alert("Pronostics valides. Ils sont maintenant verrouilles pour ce show.")
   }
 
   if (loading) return <p className="text-white">Chargement...</p>
@@ -222,7 +222,7 @@ export default function EventDetailPage() {
           )}
 
           <input
-            disabled={isClosed}
+            disabled={isClosed || isSubmitted || isSubmitting}
             className="border p-3 rounded w-full text-white placeholder-neutral-300 bg-neutral-800"
             placeholder="Ton prono (ex: Roman Reigns)"
             value={predictions[match.id] || ""}
@@ -232,23 +232,31 @@ export default function EventDetailPage() {
       ))}
 
       <div className="mt-4">
-        {hasSavedPredictions && !isClosed && (
+        {hasDraftPredictions && !isClosed && !isSubmitted && (
           <p className="text-center text-sm text-neutral-300 mb-3">
-            Tes pronos deja enregistres sont charges ici. Tu peux les modifier
-            puis enregistrer de nouveau.
+            Tes anciens champs sont precharges. Termine tous les matchs puis
+            valide une seule fois.
+          </p>
+        )}
+
+        {isSubmitted && (
+          <p className="text-center text-sm text-green-400 mb-3">
+            Tes pronos sont valides et verrouilles pour ce show.
           </p>
         )}
       </div>
 
       <div className="flex justify-center">
         <button
-          disabled={isClosed}
+          disabled={isClosed || isSubmitted || isSubmitting}
           onClick={handleSubmit}
           className="px-6 py-3 rounded mt-4 font-bold bg-green-600 hover:bg-green-700"
         >
-          {hasSavedPredictions
-            ? "Mettre a jour mes pronos"
-            : "Valider mes pronos pour le show"}
+          {isSubmitted
+            ? "Pronostics verrouilles"
+            : isSubmitting
+              ? "Validation..."
+              : "Valider definitivement mes pronos"}
         </button>
       </div>
     </div>
