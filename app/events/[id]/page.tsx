@@ -17,6 +17,7 @@ type MatchRow = {
   id: string
   match_type: string | null
   match_image_url: string | null
+  prediction_options: string[] | null
 }
 
 type UserPredictionRow = {
@@ -40,6 +41,8 @@ export default function EventDetailPage() {
   const hasDraftPredictions =
     savedPredictionCount > 0 && savedPredictionCount < matches.length
 
+  const normalizeChoice = (value: string) => value.trim().toLowerCase()
+
   useEffect(() => {
     const fetchData = async () => {
       const { data: eventData } = await supabase
@@ -50,7 +53,7 @@ export default function EventDetailPage() {
 
       const { data: matchesData } = await supabase
         .from("matches")
-        .select("id, match_type, match_image_url")
+        .select("id, match_type, match_image_url, prediction_options")
         .eq("event_id", eventId)
         .order("display_order", { ascending: true })
 
@@ -116,6 +119,9 @@ export default function EventDetailPage() {
     setPredictions((prev) => ({ ...prev, [matchId]: value }))
   }
 
+  const isSelectedOption = (matchId: string, option: string) =>
+    normalizeChoice(predictions[matchId] || "") === normalizeChoice(option)
+
   const handleSubmit = async () => {
     if (isClosed) return alert("Pronos fermes")
     if (isSubmitted) {
@@ -173,6 +179,11 @@ export default function EventDetailPage() {
         return
       }
 
+      if (error.message.includes("INVALID_PREDICTION_OPTION")) {
+        alert("Un des choix envoyes ne correspond pas aux options du match.")
+        return
+      }
+
       if (error.message.includes("EVENT_CLOSED")) {
         setIsClosed(true)
         alert("Les pronos sont fermes pour ce show.")
@@ -221,13 +232,37 @@ export default function EventDetailPage() {
             </div>
           )}
 
-          <input
-            disabled={isClosed || isSubmitted || isSubmitting}
-            className="border p-3 rounded w-full text-white placeholder-neutral-300 bg-neutral-800"
-            placeholder="Ton prono (ex: Roman Reigns)"
-            value={predictions[match.id] || ""}
-            onChange={(e) => handleChange(match.id, e.target.value)}
-          />
+          {(match.prediction_options || []).length > 0 ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {(match.prediction_options || []).map((option) => {
+                const isSelected = isSelectedOption(match.id, option)
+
+                return (
+                  <button
+                    key={`${match.id}-${option}`}
+                    type="button"
+                    disabled={isClosed || isSubmitted || isSubmitting}
+                    onClick={() => handleChange(match.id, option)}
+                    className={`rounded-xl border px-4 py-3 text-left font-semibold transition ${
+                      isSelected
+                        ? "border-green-400 bg-green-500/15 text-green-300"
+                        : "border-neutral-700 bg-neutral-800 text-white hover:border-green-500"
+                    }`}
+                  >
+                    {option}
+                  </button>
+                )
+              })}
+            </div>
+          ) : (
+            <input
+              disabled={isClosed || isSubmitted || isSubmitting}
+              className="border p-3 rounded w-full text-white placeholder-neutral-300 bg-neutral-800"
+              placeholder="Ton prono (ex: Roman Reigns)"
+              value={predictions[match.id] || ""}
+              onChange={(e) => handleChange(match.id, e.target.value)}
+            />
+          )}
         </div>
       ))}
 

@@ -22,6 +22,25 @@ type Match = {
   match_type: string | null
   match_image_url: string | null
   display_order: number
+  prediction_options: string[] | null
+}
+
+function parsePredictionOptions(input: string) {
+  const seen = new Set<string>()
+
+  return input
+    .split(/\r?\n|,/)
+    .map((option) => option.trim())
+    .filter((option) => {
+      if (!option) return false
+
+      const normalizedOption = option.toLowerCase()
+
+      if (seen.has(normalizedOption)) return false
+
+      seen.add(normalizedOption)
+      return true
+    })
 }
 
 export default function AdminPage() {
@@ -50,12 +69,14 @@ export default function AdminPage() {
   const [matchForm, setMatchForm] = useState({
     match_type: "",
     match_image_url: "",
+    prediction_options_text: "",
   })
 
   const [editingMatchId, setEditingMatchId] = useState<string | null>(null)
   const [editForm, setEditForm] = useState({
     match_type: "",
     match_image_url: "",
+    prediction_options_text: "",
   })
 
   async function fetchEvents() {
@@ -175,10 +196,17 @@ export default function AdminPage() {
         match_type: matchForm.match_type,
         match_image_url: matchForm.match_image_url || null,
         display_order: nextOrder,
+        prediction_options: parsePredictionOptions(
+          matchForm.prediction_options_text
+        ),
       },
     ])
 
-    setMatchForm({ match_type: "", match_image_url: "" })
+    setMatchForm({
+      match_type: "",
+      match_image_url: "",
+      prediction_options_text: "",
+    })
     await fetchMatches(selectedEvent.id)
   }
 
@@ -194,11 +222,21 @@ export default function AdminPage() {
     setEditForm({
       match_type: match.match_type || "",
       match_image_url: match.match_image_url || "",
+      prediction_options_text: (match.prediction_options || []).join("\n"),
     })
   }
 
   const saveEditMatch = async (id: string) => {
-    await supabase.from("matches").update(editForm).eq("id", id)
+    await supabase
+      .from("matches")
+      .update({
+        match_type: editForm.match_type,
+        match_image_url: editForm.match_image_url || null,
+        prediction_options: parsePredictionOptions(
+          editForm.prediction_options_text
+        ),
+      })
+      .eq("id", id)
     setEditingMatchId(null)
 
     if (selectedEvent) {
@@ -575,6 +613,20 @@ export default function AdminPage() {
             }
           />
 
+          <textarea
+            className="input min-h-32"
+            placeholder={
+              "Choix cliquables, un par ligne\nEx: Roman Reigns\nCM Punk"
+            }
+            value={matchForm.prediction_options_text}
+            onChange={(e) =>
+              setMatchForm({
+                ...matchForm,
+                prediction_options_text: e.target.value,
+              })
+            }
+          />
+
           {matchForm.match_image_url && (
             <img
               src={matchForm.match_image_url}
@@ -633,6 +685,17 @@ export default function AdminPage() {
                       }
                     />
 
+                    <textarea
+                      className="input mb-2 min-h-32"
+                      value={editForm.prediction_options_text}
+                      onChange={(e) =>
+                        setEditForm({
+                          ...editForm,
+                          prediction_options_text: e.target.value,
+                        })
+                      }
+                    />
+
                     {editForm.match_image_url && (
                       <img
                         src={editForm.match_image_url}
@@ -656,8 +719,28 @@ export default function AdminPage() {
                     </button>
                   </>
                 ) : (
-                  <div className="flex justify-between items-center">
-                    <span>{match.match_type}</span>
+                  <div className="flex justify-between items-start gap-4">
+                    <div className="space-y-2">
+                      <span className="block">{match.match_type}</span>
+
+                      {(match.prediction_options || []).length > 0 ? (
+                        <div className="flex flex-wrap gap-2">
+                          {(match.prediction_options || []).map((option) => (
+                            <span
+                              key={`${match.id}-${option}`}
+                              className="rounded-full border border-neutral-600 px-3 py-1 text-xs text-neutral-200"
+                            >
+                              {option}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-orange-300">
+                          Aucun choix cliquable configure pour ce match.
+                        </p>
+                      )}
+                    </div>
+
                     <div className="flex gap-3 items-center">
                       <button
                         onClick={() => void moveMatch(index, "up")}
