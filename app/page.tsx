@@ -3,12 +3,22 @@
 import Link from "next/link"
 import { useEffect, useState } from "react"
 import { supabase } from "@/lib/supabase"
+import {
+  fetchPublicLeaderboard,
+  type LeaderboardProfile,
+} from "@/lib/leaderboard"
 import { useRouter } from "next/navigation"
+
+type HomeEvent = {
+  name: string
+  starts_at: string
+  image_url: string | null
+}
 
 export default function HomePage() {
   const router = useRouter()
-  const [nextEvent, setNextEvent] = useState<any>(null)
-  const [topPlayers, setTopPlayers] = useState<any[]>([])
+  const [nextEvent, setNextEvent] = useState<HomeEvent | null>(null)
+  const [topPlayers, setTopPlayers] = useState<LeaderboardProfile[]>([])
 
   useEffect(() => {
     const init = async () => {
@@ -29,14 +39,13 @@ export default function HomePage() {
         .limit(1)
         .single()
 
-      if (event) setNextEvent(event)
+      if (event) setNextEvent(event as HomeEvent)
 
       // 🏆 Top 3
-      const { data: leaderboard } = await supabase
-        .from("profiles")
-        .select("pseudo, season_points")
-        .order("season_points", { ascending: false })
-        .limit(3)
+      const leaderboard = await fetchPublicLeaderboard({
+        mode: "season",
+        limit: 3,
+      })
 
       if (leaderboard) setTopPlayers(leaderboard)
     }

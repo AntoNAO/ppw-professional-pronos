@@ -3,6 +3,7 @@
 import { useEffect, useState } from "react"
 import Link from "next/link"
 import { supabase } from "@/lib/supabase"
+import { fetchPublicLeaderboard } from "@/lib/leaderboard"
 import PixelWalker from "../components/PixelWalker"
 
 type DashboardProfile = {
@@ -135,11 +136,10 @@ export default function DashboardPage() {
           .limit(1)
           .maybeSingle()
 
-        const { data: top3Data } = await client
-          .from("profiles")
-          .select("pseudo, season_points")
-          .order("season_points", { ascending: false })
-          .limit(3)
+        const top3Data = await fetchPublicLeaderboard({
+          mode: "season",
+          limit: 3,
+        })
 
         setProfile(profileData)
         setStats({

@@ -1,42 +1,35 @@
 "use client"
 
 import { useEffect, useState } from "react"
-import { supabase } from "@/lib/supabase"
-
-type Profile = {
-  id: string
-  pseudo: string
-  season_points: number
-  all_time_points: number
-}
+import {
+  fetchPublicLeaderboard,
+  type LeaderboardMode,
+  type LeaderboardProfile,
+} from "@/lib/leaderboard"
 
 export default function LeaderboardPage() {
-  const [players, setPlayers] = useState<Profile[]>([])
+  const [players, setPlayers] = useState<LeaderboardProfile[]>([])
   const [loading, setLoading] = useState(true)
-  const [mode, setMode] = useState<"season" | "alltime">("season")
+  const [mode, setMode] = useState<LeaderboardMode>("season")
 
   useEffect(() => {
     const load = async () => {
-      if (!supabase) return
+      setLoading(true)
 
-      const { data, error } = await supabase
-        .from("profiles")
-        .select("id, pseudo, season_points, all_time_points")
-        .order(
-          mode === "season" ? "season_points" : "all_time_points",
-          { ascending: false }
-        )
-
-      if (error) {
-        alert("Erreur leaderboard : " + error.message)
-        return
+      try {
+        const data = await fetchPublicLeaderboard({ mode })
+        setPlayers(data)
+      } catch (error) {
+        const message =
+          error instanceof Error ? error.message : "Erreur inconnue"
+        alert("Erreur leaderboard : " + message)
+        setPlayers([])
+      } finally {
+        setLoading(false)
       }
-
-      setPlayers(data || [])
-      setLoading(false)
     }
 
-    load()
+    void load()
   }, [mode])
 
   if (loading)
